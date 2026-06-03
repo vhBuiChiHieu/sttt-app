@@ -1,0 +1,10 @@
+node_modules/
+out/
+dist/
+*.log
+.claude/
+docs/
+
+# tsc / electron-vite emit artifacts of the config (source is the .ts)
+electron.vite.config.js
+electron.vite.config.d.ts

@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Strict CSP per SPEC §11: only Soniox wss + worker https allowed in connect-src. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' wss://stt-rt.soniox.com https://soniox.obert-john.workers.dev; object-src 'none'; base-uri 'none'"
+    />
+    <title>Overlay</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./src/overlay/main.tsx"></script>
+  </body>
+</html>

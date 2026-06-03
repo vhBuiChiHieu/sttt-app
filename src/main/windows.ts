@@ -1,0 +1,127 @@
+// Window manager (§4.1, §4.2). Builds the two BrowserWindows — a transparent,
+// click-through overlay and a frameless rounded control window — with the exact
+// properties from SPEC §4.2 and the hardened webPreferences from §11.
+
+import { BrowserWindow, screen, shell } from 'electron';
+import { join } from 'node:path';
+
+// Shared, security-hardened webPreferences for every window (§11):
+// no node integration, context isolation on, sandboxed, typed preload bridge.
+function securePreferences(): Electron.WebPreferences {
+  return {
+    // Preload emits as .cjs (see electron.vite.config.ts) so it loads under sandbox.
+    preload: join(__dirname, '../preload/index.cjs'),
+    contextIsolation: true,
+    sandbox: true,
+    nodeIntegration: false,
+    // Block <webview>; we never embed untrusted content.
+    webviewTag: false,
+  };
+}
+
+// Load a renderer entry by HTML filename, using electron-vite's dev server URL
+// when present and the bundled file otherwise.
+function loadEntry(win: BrowserWindow, htmlFile: string): void {
+  const devUrl = process.env['ELECTRON_RENDERER_URL'];
+  if (devUrl) {
+    void win.loadURL(`${devUrl}/${htmlFile}`);
+  } else {
+    void win.loadFile(join(__dirname, `../renderer/${htmlFile}`));
+  }
+}
+
+// Harden a window against external navigation and new-window popups (§11).
+// Returning { action: 'deny' } blocks window.open; the will-navigate guard
+// blocks in-app navigation away from the bundle (dev URL is allowlisted).
+function hardenNavigation(win: BrowserWindow): void {
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    // External http(s) links open in the user's browser, never in-app.
+    if (url.startsWith('http:') || url.startsWith('https:')) {
+      void shell.openExternal(url);
+    }
+    return { action: 'deny' };
+  });
+
+  win.webContents.on('will-navigate', (event, url) => {
+    const devUrl = process.env['ELECTRON_RENDERER_URL'];
+    const allowed = devUrl ? url.startsWith(devUrl) : url.startsWith('file:');
+    if (!allowed) event.preventDefault();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Overlay window (§4.2): transparent, frameless, always-on-top at screen-saver
+// level, visible on all workspaces, off the taskbar, resizable, no shadow, and
+// click-through by default (toggleable via setClickThrough()).
+// ---------------------------------------------------------------------------
+export function createOverlay(): BrowserWindow {
+  // Anchor a reasonably sized caption bar near the bottom-center of the primary
+  // display's work area; the renderer fine-tunes layout from settings.
+  const { workArea } = screen.getPrimaryDisplay();
+  const width = Math.min(960, workArea.width - 80);
+  const height = 200;
+  const x = workArea.x + Math.round((workArea.width - width) / 2);
+  const y = workArea.y + workArea.height - height - 48;
+
+  const win = new BrowserWindow({
+    width,
+    height,
+    x,
+    y,
+    transparent: true,
+    frame: false,
+    resizable: true,
+    hasShadow: false,
+    skipTaskbar: true,
+    // Don't steal focus when the overlay shows over other apps.
+    focusable: false,
+    show: false,
+    webPreferences: securePreferences(),
+  });
+
+  // Always-on-top at the highest practical level so the overlay survives over
+  // fullscreen apps (§4.2, §7.8). 1 = always above the screen-saver level.
+  win.setAlwaysOnTop(true, 'screen-saver', 1);
+  // Float across every virtual desktop / fullscreen space (§7.8).
+  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+
+  // Click-through by default — pointer events pass to the app beneath, while
+  // `forward:true` still lets the renderer receive move events for hover UI.
+  win.setIgnoreMouseEvents(true, { forward: true });
+
+  hardenNavigation(win);
+  loadEntry(win, 'overlay.html');
+  return win;
+}
+
+// ---------------------------------------------------------------------------
+// Control window (§4.2): normal frameless rounded window, 420×640, draggable
+// header (handled CSS-side via -webkit-app-region), single instance enforced by
+// the caller. Hidden until ready-to-show to avoid a white flash.
+// ---------------------------------------------------------------------------
+export function createControl(): BrowserWindow {
+  const win = new BrowserWindow({
+    width: 420,
+    height: 640,
+    frame: false,
+    resizable: false,
+    show: false,
+    // Rounded corners + translucency hint on supported platforms.
+    roundedCorners: true,
+    backgroundColor: '#00000000',
+    webPreferences: securePreferences(),
+  });
+
+  win.on('ready-to-show', () => win.show());
+
+  hardenNavigation(win);
+  loadEntry(win, 'control.html');
+  return win;
+}
+
+// Toggle the overlay's click-through lock (§7.7 Ctrl+Alt+L, §4.4
+// overlay:set-clickthrough). `locked:true` → click-through (events pass below);
+// `locked:false` → interactive overlay.
+export function setClickThrough(overlay: BrowserWindow, locked: boolean): void {
+  overlay.setIgnoreMouseEvents(locked, { forward: true });
+}

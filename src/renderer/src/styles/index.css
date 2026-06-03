@@ -1,0 +1,40 @@
+/* Offline font bundles (no CDN) — Inter for UI/source, Be Vietnam Pro for VI translation. */
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/be-vietnam-pro/400.css';
+@import '@fontsource/be-vietnam-pro/600.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Design tokens (SPEC §7.1). Single source of truth consumed by Tailwind theme vars. */
+:root {
+  --bg: #0b0c0f;
+  --surface: #14161b;
+  --glass: rgba(18, 20, 25, 0.72);
+  --border: rgba(255, 255, 255, 0.08);
+  --text: #f4f5f7;
+  --text-provisional: rgba(201, 205, 212, 0.62);
+  --muted: #9aa0aa;
+  --accent: #6366f1;
+  --accent-grad: linear-gradient(90deg, #818cf8, #6366f1);
+  --ok: #10b981;
+  --warn: #f59e0b;
+  --err: #ef4444;
+  --shadow-overlay: 0 8px 32px rgba(0, 0, 0, 0.45);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', system-ui, sans-serif;
+}

@@ -49,6 +49,29 @@ function hardenNavigation(win: BrowserWindow): void {
   });
 }
 
+// Dev-only: forward each renderer's console + crash/load failures to the MAIN
+// process terminal. Renderer logs normally live only in that window's DevTools;
+// piping them here means `npm run dev` (and an in-session `!` run) captures all
+// of it — WS/audio/CSP errors included — without opening DevTools. The dev URL
+// env is set by electron-vite only in dev, so this is a no-op in production.
+function attachDevLogging(win: BrowserWindow, label: string): void {
+  if (!process.env['ELECTRON_RENDERER_URL']) return;
+  const wc = win.webContents;
+  const levels = ['log', 'info', 'warn', 'error'];
+  wc.on('console-message', (_e, level, message, line, sourceId) => {
+    console.log(`[${label}:${levels[level] ?? 'log'}] ${message}  (${sourceId}:${line})`);
+  });
+  wc.on('preload-error', (_e, preloadPath, error) => {
+    console.error(`[${label}:preload-error] ${preloadPath}\n`, error);
+  });
+  wc.on('render-process-gone', (_e, details) => {
+    console.error(`[${label}:render-gone] reason=${details.reason} exitCode=${details.exitCode}`);
+  });
+  wc.on('did-fail-load', (_e, code, desc, url) => {
+    console.error(`[${label}:did-fail-load] ${code} ${desc} ${url}`);
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Overlay window (§4.2): transparent, frameless, always-on-top at screen-saver
 // level, visible on all workspaces, off the taskbar, resizable, no shadow, and
@@ -90,6 +113,7 @@ export function createOverlay(): BrowserWindow {
   win.setIgnoreMouseEvents(true, { forward: true });
 
   hardenNavigation(win);
+  attachDevLogging(win, 'overlay');
   loadEntry(win, 'overlay.html');
   return win;
 }
@@ -115,6 +139,7 @@ export function createControl(): BrowserWindow {
   win.on('ready-to-show', () => win.show());
 
   hardenNavigation(win);
+  attachDevLogging(win, 'control');
   loadEntry(win, 'control.html');
   return win;
 }

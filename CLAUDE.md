@@ -53,7 +53,7 @@ No `.env` / API key needed — Soniox key minted at runtime (see Gotchas).
 | File | Role |
 |------|------|
 | `src/shared/types.ts` | Domain types — `Settings`, `DEFAULT_SETTINGS`, `Token`, `SessionStatus`. Dependency-free. |
-| `src/shared/ipc.ts` | IPC contract — 10 `CHANNELS` + payloads + `IpcApi`. Edit here first. |
+| `src/shared/ipc.ts` | IPC contract — 11 `CHANNELS` + payloads + `IpcApi`. Edit here first. |
 | `src/main/tempKey.ts` | Mints Soniox temp key from Cloudflare worker |
 | `src/main/index.ts` | App bootstrap + global hotkey registration |
 | `src/renderer/src/soniox/client.ts` | Soniox realtime WS client |
@@ -63,8 +63,8 @@ No `.env` / API key needed — Soniox key minted at runtime (see Gotchas).
 
 `session:start` `session:stop` `session:config` `session:refresh-key`
 `session:state` · `overlay:set-mode` `overlay:set-clickthrough`
-`overlay:appearance` · `settings:get` `settings:set`. Event subscriptions return
-an `Unsubscribe`.
+`overlay:appearance` · `settings:get` `settings:set` · `app:quit`. Event
+subscriptions return an `Unsubscribe`.
 
 ## Global hotkeys (`src/main/index.ts`, persisted in `Settings.hotkeys`)
 
@@ -118,7 +118,7 @@ Playwright dep present, E2E not wired yet.
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **stt-dk-free** (953 symbols, 2095 relationships, 53 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **sttt-app** (965 symbols, 2107 relationships, 53 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
@@ -141,10 +141,10 @@ This project is indexed by GitNexus as **stt-dk-free** (953 symbols, 2095 relati
 
 | Resource | Use for |
 |----------|---------|
-| `gitnexus://repo/stt-dk-free/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/stt-dk-free/clusters` | All functional areas |
-| `gitnexus://repo/stt-dk-free/processes` | All execution flows |
-| `gitnexus://repo/stt-dk-free/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/sttt-app/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/sttt-app/clusters` | All functional areas |
+| `gitnexus://repo/sttt-app/processes` | All execution flows |
+| `gitnexus://repo/sttt-app/process/{name}` | Step-by-step execution trace |
 
 ## CLI
 

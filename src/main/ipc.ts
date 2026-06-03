@@ -2,7 +2,7 @@
 // channel in the §4.4 table, all typed via @shared/ipc. Routes payloads between
 // the control window, the overlay window, the temp-key manager and settings.
 
-import { BrowserWindow, ipcMain, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron';
+import { app, BrowserWindow, ipcMain, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron';
 import {
   CHANNELS,
   type OverlayAppearancePayload,
@@ -143,6 +143,12 @@ export function registerIpc(refs: WindowRefs): void {
     CHANNELS.settingsSet,
     (_e: IpcMainInvokeEvent, settings: Settings): void => setSettings(settings),
   );
+
+  // --- app:quit (Control → Main) ------------------------------------------
+  // Full app exit from the control window's close button. app.quit() fires
+  // will-quit (global shortcuts released) and tears down the tray, overriding
+  // the window-all-closed keep-alive that normally parks the app in the tray.
+  ipcMain.on(CHANNELS.appQuit, () => app.quit());
 }
 
 // Tear down all handlers (e.g. before quit) so nothing leaks across reloads.

@@ -51,6 +51,9 @@ const api: IpcApi = {
   setSettings: (settings: Settings): Promise<void> =>
     ipcRenderer.invoke(CHANNELS.settingsSet, settings),
 
+  // --- App lifecycle (renderer → main, fire-and-forget) ---
+  quitApp: () => ipcRenderer.send(CHANNELS.appQuit),
+
   // --- Inbound events (main/overlay → renderer) ---
   onSessionConfig: (handler) =>
     subscribe<SessionConfigPayload>(CHANNELS.sessionConfig, handler),

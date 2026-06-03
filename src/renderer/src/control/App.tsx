@@ -22,6 +22,12 @@ const dragStyle: CSSProperties & { WebkitAppRegion?: 'drag' | 'no-drag' } = {
   WebkitAppRegion: 'drag',
 }
 
+// Interactive header controls (the close button) must opt out of the drag
+// region or clicks get swallowed by the frameless window drag handler.
+const noDragStyle: CSSProperties & { WebkitAppRegion?: 'drag' | 'no-drag' } = {
+  WebkitAppRegion: 'no-drag',
+}
+
 export function App(): JSX.Element {
   // --- Session state (driven by the inbound session:state stream) ---
   const status = useSessionStore((s) => s.status)
@@ -167,6 +173,11 @@ export function App(): JSX.Element {
     window.api.stopSession()
   }, [])
 
+  // --- Quit: close button exits the whole app (tray + windows), not just hide. ---
+  const onQuit = useCallback(() => {
+    window.api.quitApp()
+  }, [])
+
   // Runtime reduced-motion override class (§7.1/§7.8) — kills decorative motion.
   const rootMotionClass = settings.reducedMotion ? 'ctrl-reduced-motion' : ''
 
@@ -181,6 +192,18 @@ export function App(): JSX.Element {
           <h1 className="text-[15px] font-semibold text-text">STT → Vietnamese</h1>
           <p className="text-[11px] text-muted">Realtime translator</p>
         </div>
+
+        {/* Close button — quits the app (§4.2 frameless window has no native chrome). */}
+        <button
+          type="button"
+          onClick={onQuit}
+          aria-label="Quit app"
+          title="Quit"
+          style={noDragStyle}
+          className="flex h-7 w-7 items-center justify-center rounded-10 text-[16px] leading-none text-muted transition-colors hover:bg-[rgba(239,68,68,0.15)] hover:text-err"
+        >
+          ✕
+        </button>
       </header>
 
       {/* Scrollable card stack. */}

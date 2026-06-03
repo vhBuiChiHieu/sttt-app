@@ -20,6 +20,7 @@ export const CHANNELS = {
   overlayAppearance: 'overlay:appearance',
   settingsGet: 'settings:get',
   settingsSet: 'settings:set',
+  appQuit: 'app:quit',
 } as const;
 
 // Union of all channel string literals.
@@ -124,6 +125,9 @@ export interface IpcApi {
   // --- Settings (renderer ↔ main) ---
   getSettings(): Promise<Settings>;
   setSettings(settings: Settings): Promise<void>;
+
+  // --- App lifecycle (renderer → main): quit the whole app (tray + windows). ---
+  quitApp(): void;
 
   // --- Inbound events (main/overlay → renderer) ---
   onSessionConfig(handler: (payload: SessionConfigPayload) => void): Unsubscribe;

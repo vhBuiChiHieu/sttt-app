@@ -5,9 +5,11 @@
 import {
   app,
   BrowserWindow,
+  desktopCapturer,
   globalShortcut,
   Menu,
   nativeImage,
+  session,
   Tray,
 } from 'electron';
 import { createControl, createOverlay, setClickThrough } from './windows.js';
@@ -52,6 +54,7 @@ async function bootstrap(): Promise<void> {
   await app.whenReady();
 
   hardenWebContentsGlobally();
+  registerDisplayMediaHandler();
   createWindows();
   registerIpc(refs);
   createTray();
@@ -220,10 +223,60 @@ function hardenWebContentsGlobally(): void {
       const allowed = devUrl ? url.startsWith(devUrl) : url.startsWith('file:');
       if (!allowed) event.preventDefault();
     });
-    // Refuse all renderer permission requests (mic etc. are requested in the
-    // renderer via getDisplayMedia, which is gated separately).
-    contents.session.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
+    // Allow only the capture permissions, deny everything else (§11). NOTE:
+    // getDisplayMedia (loopback capture, §5) requests the `media` permission —
+    // NOT `display-capture` — so `media` must be granted or the call is denied
+    // before our setDisplayMediaRequestHandler runs. The actual capture source
+    // stays gated by that handler, and the app has no microphone/getUserMedia
+    // path, so allowing `media` keeps §11 intent (geolocation, notifications,
+    // midi, etc. all remain denied).
+    contents.session.setPermissionRequestHandler((_wc, perm, cb) => {
+      cb(perm === 'display-capture' || perm === 'media');
+    });
   });
+}
+
+// ---------------------------------------------------------------------------
+// Display-media handler (§5). getDisplayMedia() in the renderer is gated by this
+// handler; without it Electron denies the request ("permission denied"). We
+// return a screen as the REQUIRED video source (the renderer stops/drops the
+// video track immediately) plus 'loopback' to capture system audio on Windows.
+// Auto-selecting the first screen means no OS picker interrupts Start.
+// ---------------------------------------------------------------------------
+function registerDisplayMediaHandler(): void {
+  const dev = !!process.env['ELECTRON_RENDERER_URL'];
+  if (dev) console.log('[main] display-media handler registered');
+
+  // getDisplayMedia also fires a permission *check* (Chromium checks it as the
+  // `media` permission). Electron's default check denies it, so implement the
+  // check too — docs: "you must also implement setPermissionCheckHandler". Allow
+  // only `media`; everything else stays denied (§11).
+  session.defaultSession.setPermissionCheckHandler((_wc, permission) => permission === 'media');
+
+  session.defaultSession.setDisplayMediaRequestHandler(
+    (_request, callback) => {
+      desktopCapturer
+        .getSources({ types: ['screen'] })
+        .then((sources) => {
+          // No screen source → cancel; capture.ts then throws NoAudioDeviceError.
+          if (sources.length === 0) {
+            if (dev) console.warn('[main] display-media: no screen sources — cancelling');
+            callback({});
+            return;
+          }
+          if (dev) {
+            console.log(`[main] display-media: granting screen "${sources[0].name}" + loopback audio`);
+          }
+          callback({ video: sources[0], audio: 'loopback' });
+        })
+        .catch((err) => {
+          console.error('[main] display-media: getSources failed', err);
+          callback({});
+        });
+    },
+    // Use our handler (auto screen pick), not the OS picker.
+    { useSystemPicker: false },
+  );
 }
 
 // ---------------------------------------------------------------------------

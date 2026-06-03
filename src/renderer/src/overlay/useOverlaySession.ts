@@ -120,6 +120,7 @@ export function useOverlaySession(): void {
         audio.setDeviceOk(true);
       } catch (err) {
         // Capture failure (no loopback device / user-cancelled picker, §15).
+        console.error('[overlay] loopback capture failed:', err);
         const message = err instanceof Error ? err.message : 'Audio capture failed';
         audio.setDeviceOk(false);
         session.setError(message);
@@ -140,10 +141,14 @@ export function useOverlaySession(): void {
     // current line, broadcast the stopped status up to control, then tear down
     // audio + WS (§6.2 rule 4 / §7.5 stopped). Guarded to a live session.
     const offStop = window.api.onSessionStop(() => {
-      if (!client) return;
+      // Always finalize + broadcast 'stopped', even when there is no live client
+      // (a failed start nulls `client` in the capture-error path above). Skipping
+      // this leaves control stuck on the red "Stop" button — session:state never
+      // returns to a terminal status — so the user can't stop/retry (§7.5).
+      // teardownSession is null-safe: it guards on client/pipeline/timer.
+      useTokenStore.getState().flushSegment();
       useSessionStore.getState().setStatus('stopped');
       broadcast('stopped');
-      useTokenStore.getState().flushSegment();
       void teardownSession();
     });
 

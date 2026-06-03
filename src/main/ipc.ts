@@ -56,6 +56,10 @@ export async function startSession(
     };
     if (overlay && !overlay.isDestroyed()) {
       overlay.showInactive(); // reveal without stealing focus
+      // The overlay's getDisplayMedia (loopback capture) is gated by main's
+      // setDisplayMediaRequestHandler + setPermissionCheckHandler (index.ts §5/§11),
+      // not by renderer user activation — so just push the config and let the
+      // overlay open capture.
       sendTo(overlay, CHANNELS.sessionConfig, config);
     }
   } catch (err) {

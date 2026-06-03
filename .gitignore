@@ -4,6 +4,9 @@ dist/
 *.log
 .claude/
 docs/
+.gitnexus/
+AGENTS.md
+.claude/
 
 # tsc / electron-vite emit artifacts of the config (source is the .ts)
 electron.vite.config.js

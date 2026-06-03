@@ -77,9 +77,12 @@ export function createSonioxSession(
     mintKey: () => window.api.refreshKey(),
     callbacks: {
       onMessage: (msg) => {
-        // 1) Feed tokens into the store — it applies the §6.2 lane/final/provisional rules.
-        if (msg.tokens.length > 0) {
-          store.getState().ingestTokens(msg.tokens);
+        // 1) Feed tokens into the store — it applies the §6.2 lane/final/provisional
+        //    rules. Strip the endpoint sentinel tokens first so '<end>'/'<fin>'
+        //    never leak into the rendered source line.
+        const realTokens = msg.tokens.filter((t) => !ENDPOINT_MARKERS.has(t.text));
+        if (realTokens.length > 0) {
+          store.getState().ingestTokens(realTokens);
         }
         // 2) On a finalization boundary, push the current line into history.
         if (isFinalizationBoundary(msg)) {

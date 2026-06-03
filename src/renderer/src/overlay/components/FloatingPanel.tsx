@@ -175,11 +175,20 @@ export function FloatingPanel(): JSX.Element {
     resizeRef.current = null;
   };
 
+  // Local mirror of the overlay click-through lock (main owns the real window
+  // state via setIgnoreMouseEvents; this drives the header button's toggle).
+  const [clickThroughLocked, setClickThroughLocked] = useState(false);
+
   // Header control handlers (local/store updates only; no IPC ownership here).
   const bumpFont = (delta: number): void =>
     setSetting('fontScale', Math.min(2, Math.max(0.8, Number((fontScale + delta).toFixed(2)))));
   const switchToCaption = (): void => setSetting('overlayMode', 'caption');
-  const toggleClickThrough = (): void => window.api.setClickThrough({ locked: true });
+  // Toggle (not just lock) click-through so the button can also unlock.
+  const toggleClickThrough = (): void => {
+    const next = !clickThroughLocked;
+    setClickThroughLocked(next);
+    window.api.setClickThrough({ locked: next });
+  };
   const cycleOpacity = (): void =>
     setSetting('opacity', opacity >= 0.95 ? 0.6 : Number((opacity + 0.15).toFixed(2)));
 

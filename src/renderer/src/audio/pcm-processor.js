@@ -50,22 +50,27 @@ class PcmDownsampler extends AudioWorkletProcessor {
         int16[i] = PcmDownsampler._floatToInt16(channel[i]);
       }
     } else {
-      // Fallback path: linear-interpolate down to 16 kHz.
-      // outCount = how many 16 kHz samples this input block yields.
-      const outCount = Math.floor((channel.length - this._readPos) / this._ratio);
-      int16 = new Int16Array(outCount > 0 ? outCount : 0);
+      // Fallback path: linear-interpolate to 16 kHz. `_readPos` is the fractional
+      // read index into THIS block and is ALWAYS >= 0 — the carry below keeps it in
+      // [0, ratio). The previous version let it go negative across blocks, so the
+      // next block read channel[-1] → undefined → NaN sample glitches.
+      // Mirror of resampleLinearTo16k() in pcm-convert.ts — keep the two in sync.
+      const ratio = this._ratio;
+      const tmp = new Int16Array(Math.ceil(channel.length / ratio) + 2);
+      let n = 0;
       let pos = this._readPos;
-      for (let i = 0; i < int16.length; i++) {
+      while (pos < channel.length) {
         const idx = Math.floor(pos);
         const frac = pos - idx;
         const a = channel[idx];
-        // Guard the upper neighbour at the block boundary.
+        // Clamp the upper neighbour at the block boundary.
         const b = idx + 1 < channel.length ? channel[idx + 1] : a;
-        int16[i] = PcmDownsampler._floatToInt16(a + (b - a) * frac);
-        pos += this._ratio;
+        tmp[n++] = PcmDownsampler._floatToInt16(a + (b - a) * frac);
+        pos += ratio;
       }
-      // Carry leftover fractional position into the next block.
+      // Loop exits with pos >= length → carry is in [0, ratio), never negative.
       this._readPos = pos - channel.length;
+      int16 = n === tmp.length ? tmp : tmp.slice(0, n);
     }
 
     if (int16.length > 0) {

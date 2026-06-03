@@ -43,6 +43,9 @@ export type SessionStopPayload = Record<string, never>;
 // session:config  (Main → Overlay): push minted key + Soniox config to overlay.
 export interface SessionConfigPayload {
   tempKey: string;
+  // Absolute epoch-ms expiry of tempKey — overlay seeds the Soniox client's
+  // key-refresh timer from this without an extra refresh-key round-trip.
+  expiresAt: number;
   model: string;
   sampleRate: number;
   translation: {
@@ -107,6 +110,8 @@ export interface IpcApi {
   // --- Session control (renderer → main) ---
   startSession(payload: SessionStartPayload): void;
   stopSession(): void;
+  // Overlay broadcasts its live status up; main relays it to the control window.
+  sendSessionState(payload: SessionStatePayload): void;
 
   // --- Overlay control (renderer → main/overlay) ---
   setOverlayMode(payload: OverlaySetModePayload): void;
@@ -122,6 +127,8 @@ export interface IpcApi {
 
   // --- Inbound events (main/overlay → renderer) ---
   onSessionConfig(handler: (payload: SessionConfigPayload) => void): Unsubscribe;
+  // Main relays a user/tray-initiated stop to the overlay for graceful teardown.
+  onSessionStop(handler: () => void): Unsubscribe;
   onSessionState(handler: (payload: SessionStatePayload) => void): Unsubscribe;
   onRefreshKey(handler: (payload: RefreshKeyPayload) => void): Unsubscribe;
   onOverlaySetMode(handler: (payload: OverlaySetModePayload) => void): Unsubscribe;

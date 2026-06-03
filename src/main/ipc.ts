@@ -46,9 +46,10 @@ export async function startSession(
 ): Promise<void> {
   const overlay = refs.overlay();
   try {
-    const { tempKey } = await getKey();
+    const { tempKey, expiresAt } = await getKey();
     const config: SessionConfigPayload = {
       tempKey,
+      expiresAt,
       model: SONIOX_MODEL,
       sampleRate: SONIOX_SAMPLE_RATE,
       translation: { type: 'one_way', target_language: payload.targetLang },

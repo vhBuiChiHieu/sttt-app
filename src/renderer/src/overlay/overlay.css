@@ -1,0 +1,282 @@
+/* Overlay-scoped animations (SPEC §7.4 smooth token reveal, §7.5 status states).
+ * Tailwind utility classes are generated from the renderer content globs; this
+ * file holds only the @keyframes + class hooks that cannot be expressed inline.
+ *
+ * Motion language (§7.1): easeOutExpo cubic-bezier(0.16,1,0.3,1), 120/180/220ms.
+ * We animate ONLY transform / opacity / filter for 60fps (§7.4.3 / §13.6). */
+
+:root {
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* --- §7.4.1 token enter -------------------------------------------------- */
+/* Each new word springs in: fade + 4px rise + 3px blur clearing. */
+@keyframes token-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+    filter: blur(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+/* Word currently entering. Per-word stagger is applied inline (animation-delay,
+ * capped ≤25ms in TokenLine) so words stream rather than pop as a block. */
+.tok-enter {
+  animation: token-enter 180ms var(--ease-out-expo) both;
+  will-change: transform, opacity, filter;
+}
+
+/* --- §7.4.2 finalize sweep ---------------------------------------------- */
+/* One-time left→right gradient highlight as a word locks to final. The sweep is
+ * a masked overlay (::after) so the underlying glyphs never reflow. */
+@keyframes finalize-sweep {
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(110%);
+  }
+}
+
+.tok-final {
+  position: relative;
+}
+
+/* The moving accent-grad band, clipped to the word box, fired once on finalize. */
+.tok-final.tok-sweep::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 4px;
+  background: var(--accent-grad);
+  /* Soft band: visible in the middle, transparent at the edges via mask. */
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 45%, #000 55%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 45%, #000 55%, transparent);
+  mix-blend-mode: screen;
+  opacity: 0.55;
+  animation: finalize-sweep 480ms var(--ease-out-expo) 1 both;
+  will-change: transform;
+}
+
+/* --- §7.4.2 provisional caret glow -------------------------------------- */
+/* Soft trailing caret after the live provisional tail. */
+@keyframes caret-pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+.caret-glow {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: -0.12em;
+  border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 6px 1px var(--accent);
+  animation: caret-pulse 1100ms var(--ease-out-expo) infinite;
+}
+
+/* --- §7.4.4 line settle ------------------------------------------------- */
+/* Tiny scale lock on endpoint finalize (caption mode). */
+@keyframes line-settle {
+  from {
+    transform: scale(1.005);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+.line-settle {
+  animation: line-settle 120ms var(--ease-out-expo) both;
+  will-change: transform;
+}
+
+/* --- §7.5 idle "Ready" breathing glow ----------------------------------- */
+@keyframes ready-breathe {
+  0%,
+  100% {
+    opacity: 0.6;
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 18px 2px rgba(99, 102, 241, 0.45);
+  }
+}
+
+.ready-breathe {
+  animation: ready-breathe 2600ms ease-in-out infinite;
+}
+
+/* --- §7.5 connecting shimmer (skeleton line) ---------------------------- */
+@keyframes shimmer-sweep {
+  from {
+    background-position: -150% 0;
+  }
+  to {
+    background-position: 250% 0;
+  }
+}
+
+.shimmer-line {
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(255, 255, 255, 0.12) 50%,
+    rgba(255, 255, 255, 0.04) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer-sweep 1400ms linear infinite;
+}
+
+/* 3-dot pulse while connecting. */
+@keyframes dot-pulse {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.85);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.dot-pulse {
+  animation: dot-pulse 1200ms ease-in-out infinite;
+}
+
+/* --- §7.5 reconnecting amber pulse -------------------------------------- */
+@keyframes amber-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 16px 2px rgba(245, 158, 11, 0.5);
+  }
+}
+
+.amber-pulse {
+  animation: amber-pulse 1300ms ease-in-out infinite;
+}
+
+/* --- §7.5 listening accent dot ------------------------------------------ */
+@keyframes accent-blink {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.accent-blink {
+  animation: accent-blink 1600ms ease-in-out infinite;
+}
+
+/* --- §7.5 / §7.4.4 caption line fade-up-and-out (previous line) ---------- */
+@keyframes line-fade-up {
+  from {
+    opacity: 0.7;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+.line-fade-up {
+  animation: line-fade-up 260ms var(--ease-out-expo) both;
+}
+
+/* --- §7.3 panel segment commit slide ------------------------------------ */
+@keyframes segment-commit {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.segment-commit {
+  animation: segment-commit 220ms var(--ease-out-expo) both;
+}
+
+/* --- §7.8 / §7.4 reduced-motion -----------------------------------------
+ * Two paths: the OS preference AND the in-app settingsStore override, which
+ * adds `.reduced-motion` to the overlay root. Both disable per-token transforms
+ * and keep instant opacity (no rise / blur / sweep / breathing). */
+@media (prefers-reduced-motion: reduce) {
+  .tok-enter {
+    animation: none;
+  }
+  .tok-final.tok-sweep::after,
+  .line-settle,
+  .ready-breathe,
+  .shimmer-line,
+  .dot-pulse,
+  .amber-pulse,
+  .accent-blink,
+  .line-fade-up,
+  .segment-commit,
+  .caret-glow {
+    animation: none;
+  }
+}
+
+.reduced-motion .tok-enter {
+  animation: none;
+}
+.reduced-motion .tok-final.tok-sweep::after,
+.reduced-motion .line-settle,
+.reduced-motion .ready-breathe,
+.reduced-motion .shimmer-line,
+.reduced-motion .dot-pulse,
+.reduced-motion .amber-pulse,
+.reduced-motion .accent-blink,
+.reduced-motion .line-fade-up,
+.reduced-motion .segment-commit,
+.reduced-motion .caret-glow {
+  animation: none;
+}
+
+/* Reduced-motion still hides the sweep band and keeps the caret static-visible. */
+.reduced-motion .tok-final.tok-sweep::after {
+  display: none;
+}
+.reduced-motion .caret-glow {
+  opacity: 0.7;
+}
+
+/* --- §7.8 legibility over bright video ---------------------------------- */
+/* Shared text shadow so captions stay readable on any backdrop. */
+.legible {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+/* VI lane needs generous line-height so diacritics are never clipped (§7.8). */
+.vi-lane {
+  line-height: 1.4;
+}

@@ -31,6 +31,8 @@ const api: IpcApi = {
   startSession: (payload: SessionStartPayload) =>
     ipcRenderer.send(CHANNELS.sessionStart, payload),
   stopSession: () => ipcRenderer.send(CHANNELS.sessionStop, {}),
+  sendSessionState: (payload: SessionStatePayload) =>
+    ipcRenderer.send(CHANNELS.sessionState, payload),
 
   // --- Overlay control (renderer → main/overlay) ---
   setOverlayMode: (payload: OverlaySetModePayload) =>
@@ -52,6 +54,8 @@ const api: IpcApi = {
   // --- Inbound events (main/overlay → renderer) ---
   onSessionConfig: (handler) =>
     subscribe<SessionConfigPayload>(CHANNELS.sessionConfig, handler),
+  onSessionStop: (handler) =>
+    subscribe<void>(CHANNELS.sessionStop, handler),
   onSessionState: (handler) =>
     subscribe<SessionStatePayload>(CHANNELS.sessionState, handler),
   onRefreshKey: (handler) =>

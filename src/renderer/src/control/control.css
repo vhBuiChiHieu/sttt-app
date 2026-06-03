@@ -1,0 +1,80 @@
+/* Component-scoped animation/keyframes for the Control window (§7.6).
+   Utility classes come from Tailwind (content glob covers src/renderer); only
+   the custom keyframes that Tailwind can't express live here. */
+
+/* Soft breathing glow for the idle/Ready connection dot (§7.5 idle). */
+@keyframes ctrl-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.18);
+  }
+}
+
+/* Amber pulse used for the 'reconnecting'/'connecting' transient states. */
+@keyframes ctrl-pulse {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Left-to-right shimmer for the Start button while a session is active. */
+@keyframes ctrl-sheen {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+.ctrl-dot-breathe {
+  animation: ctrl-breathe 2.6s ease-in-out infinite;
+}
+
+.ctrl-dot-pulse {
+  animation: ctrl-pulse 1.1s ease-in-out infinite;
+}
+
+.ctrl-sheen {
+  animation: ctrl-sheen 2.2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+/* Native range thumb styling (Tailwind can't target the pseudo-element).
+   Indigo accent knob with a hairline ring; track fill is set inline per value. */
+.ctrl-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 2px solid var(--accent);
+  cursor: pointer;
+}
+
+/* Reduced-motion: honor the OS setting. The settingsStore override is applied
+   at the React layer (a wrapper class) so it can win at runtime too. */
+@media (prefers-reduced-motion: reduce) {
+  .ctrl-dot-breathe,
+  .ctrl-dot-pulse,
+  .ctrl-sheen {
+    animation: none !important;
+  }
+}
+
+/* Runtime reduced-motion override (settingsStore.reducedMotion, §7.1/§7.8):
+   when this class is on an ancestor, kill all decorative motion instantly. */
+.ctrl-reduced-motion .ctrl-dot-breathe,
+.ctrl-reduced-motion .ctrl-dot-pulse,
+.ctrl-reduced-motion .ctrl-sheen {
+  animation: none !important;
+}

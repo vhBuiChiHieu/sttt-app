@@ -13,7 +13,6 @@ import { FloatingPanel } from './components/FloatingPanel';
 
 export function App(): JSX.Element {
   const overlayMode = useSettingsStore((s) => s.overlayMode);
-  const opacity = useSettingsStore((s) => s.opacity);
   const reducedMotion = useSettingsStore((s) => s.reducedMotion);
 
   // Mount the capture/STT session controller (renders nothing).
@@ -22,11 +21,10 @@ export function App(): JSX.Element {
   return (
     // The .reduced-motion class is the in-app override hook (§7.1/§7.8) consulted
     // by overlay.css alongside the prefers-reduced-motion media query.
-    // Overlay opacity (§7.6 appearance) applies to the whole surface.
-    <div
-      className={`h-full w-full ${reducedMotion ? 'reduced-motion' : ''}`}
-      style={{ opacity }}
-    >
+    // #10: settings.opacity is NOT applied as a root CSS opacity here — that
+    // faded the text too. Each surface (CaptionBar/FloatingPanel) instead drives
+    // its glass backdrop alpha from settings.opacity, keeping text fully opaque.
+    <div className={`h-full w-full ${reducedMotion ? 'reduced-motion' : ''}`}>
       {overlayMode === 'panel' ? <FloatingPanel /> : <CaptionBar />}
     </div>
   );

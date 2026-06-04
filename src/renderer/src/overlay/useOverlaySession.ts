@@ -166,6 +166,11 @@ export function useOverlaySession(): void {
       // narrows them, so cast at the boundary (validated upstream in control).
       s.set('theme', payload.theme as 'dark' | 'auto');
       s.set('position', payload.position);
+      // showSource/reducedMotion are optional (additive #11). Apply only when
+      // present so an older/partial payload can't clobber the store with
+      // undefined; FloatingPanel gates its source lanes on settings.showSource.
+      if (payload.showSource !== undefined) s.set('showSource', payload.showSource);
+      if (payload.reducedMotion !== undefined) s.set('reducedMotion', payload.reducedMotion);
     });
 
     // --- teardown on unmount -------------------------------------------------

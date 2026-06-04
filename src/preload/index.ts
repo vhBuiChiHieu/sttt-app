@@ -8,6 +8,7 @@ import {
   type IpcApi,
   type OverlayAppearancePayload,
   type OverlayClickthroughPayload,
+  type OverlayClickThroughStatePayload,
   type OverlaySetModePayload,
   type RefreshKeyPayload,
   type SessionConfigPayload,
@@ -67,6 +68,8 @@ const api: IpcApi = {
     subscribe<OverlaySetModePayload>(CHANNELS.overlaySetMode, handler),
   onOverlayAppearance: (handler) =>
     subscribe<OverlayAppearancePayload>(CHANNELS.overlayAppearance, handler),
+  onClickThroughState: (handler) =>
+    subscribe<OverlayClickThroughStatePayload>(CHANNELS.overlayClickThroughState, handler),
 };
 
 // Expose under context isolation (the default + §11). Fall back to a window

@@ -76,9 +76,13 @@ export const useTokenStore = create<TokenState>((set) => ({
   // the live line so the next utterance starts fresh.
   flushSegment: () =>
     set((state) => {
+      // #8: fold any live provisional tail into final before committing, so a
+      // half-spoken word at Stop ("I was trying to sa…") is preserved into
+      // history instead of dropped. Harmless at normal endpoints, where the
+      // provisional buffer is already empty.
       const segment: Segment = {
-        source: state.source.final,
-        vietnamese: state.vi.final,
+        source: state.source.final + state.source.provisional,
+        vietnamese: state.vi.final + state.vi.provisional,
         time: Date.now(),
       };
       return {

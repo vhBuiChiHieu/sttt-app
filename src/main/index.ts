@@ -12,8 +12,15 @@ import {
   session,
   Tray,
 } from 'electron';
-import { createControl, createOverlay, setClickThrough } from './windows.js';
-import { registerIpc, startSession, stopSession, type WindowRefs } from './ipc.js';
+import { createControl, createOverlay } from './windows.js';
+import {
+  isClickThroughLocked,
+  registerIpc,
+  setClickThroughLocked,
+  startSession,
+  stopSession,
+  type WindowRefs,
+} from './ipc.js';
 import { CHANNELS } from '@shared/ipc';
 import { getSettings, patchSettings } from './settings.js';
 
@@ -26,8 +33,8 @@ let tray: Tray | undefined;
 // Tracks whether a session is active (drives the tray Start/Stop label). The
 // overlay owns real session state; this is just a UI mirror toggled by actions.
 let sessionActive = false;
-// Tracks click-through lock so the tray/hotkey can toggle it (default: locked).
-let clickThroughLocked = true;
+// Click-through lock state now lives in ipc.ts (single source of truth, #7) so
+// the hotkey, tray and IPC paths share it; toggle via setClickThroughLocked.
 
 // Window accessors handed to the IPC layer (§4.4 routing).
 const refs: WindowRefs = {
@@ -189,10 +196,10 @@ function toggleControl(): void {
   refreshTrayMenu();
 }
 
-// Toggle overlay click-through lock (§7.7 Ctrl+Alt+L).
+// Toggle overlay click-through lock (§7.7 Ctrl+Alt+L). Route through the
+// centralized setter (ipc.ts) so the IPC path and control echo stay in sync (#7).
 function toggleClickThrough(): void {
-  clickThroughLocked = !clickThroughLocked;
-  if (overlayWin) setClickThrough(overlayWin, clickThroughLocked);
+  setClickThroughLocked(refs, !isClickThroughLocked());
 }
 
 // Set a specific overlay mode, persist it, and notify the overlay (§4.4).

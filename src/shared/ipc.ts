@@ -17,6 +17,9 @@ export const CHANNELS = {
   sessionState: 'session:state',
   overlaySetMode: 'overlay:set-mode',
   overlaySetClickThrough: 'overlay:set-clickthrough',
+  // Main → Control echo of the real click-through lock state. Lets the control
+  // toggle stay in sync after hotkey/tray flips that originate outside it (#7).
+  overlayClickThroughState: 'overlay:clickthrough-state',
   overlayAppearance: 'overlay:appearance',
   settingsGet: 'settings:get',
   settingsSet: 'settings:set',
@@ -79,12 +82,23 @@ export interface OverlayClickthroughPayload {
   locked: boolean;
 }
 
-// overlay:appearance  (Control → Overlay): live appearance update.
+// overlay:clickthrough-state  (Main → Control): the authoritative lock state
+// after any change (IPC, hotkey or tray), so the control toggle never drifts (#7).
+export interface OverlayClickThroughStatePayload {
+  locked: boolean;
+}
+
+// overlay:appearance  (Control → Overlay): live appearance update. showSource /
+// reducedMotion are OPTIONAL so the additive change stays backward-compatible
+// with any existing payload constructor; the overlay falls back to its store
+// value when a field is absent (#11).
 export interface OverlayAppearancePayload {
   fontScale: number;
   opacity: number;
   theme: string;
   position: string;
+  showSource?: boolean;
+  reducedMotion?: boolean;
 }
 
 // Maps every channel to its payload type for compile-time wiring checks.
@@ -96,6 +110,7 @@ export interface ChannelPayloads {
   [CHANNELS.sessionState]: SessionStatePayload;
   [CHANNELS.overlaySetMode]: OverlaySetModePayload;
   [CHANNELS.overlaySetClickThrough]: OverlayClickthroughPayload;
+  [CHANNELS.overlayClickThroughState]: OverlayClickThroughStatePayload;
   [CHANNELS.overlayAppearance]: OverlayAppearancePayload;
 }
 
@@ -137,4 +152,8 @@ export interface IpcApi {
   onRefreshKey(handler: (payload: RefreshKeyPayload) => void): Unsubscribe;
   onOverlaySetMode(handler: (payload: OverlaySetModePayload) => void): Unsubscribe;
   onOverlayAppearance(handler: (payload: OverlayAppearancePayload) => void): Unsubscribe;
+  // Control listens for main's echo of the real click-through lock state (#7).
+  onClickThroughState(
+    handler: (payload: OverlayClickThroughStatePayload) => void,
+  ): Unsubscribe;
 }

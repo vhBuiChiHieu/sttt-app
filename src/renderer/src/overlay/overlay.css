@@ -9,6 +9,16 @@
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* The overlay window is transparent/click-through (CLAUDE.md, §7.2) and now spans
+ * the full work area (#12). The shared index.css paints body with the opaque --bg,
+ * which would tint the whole screen — override it so only the glass surfaces paint.
+ * Overlay-scoped: this file loads after index.css and control never imports it. */
+html,
+body,
+#root {
+  background: transparent;
+}
+
 /* --- §7.4.1 token enter -------------------------------------------------- */
 /* Each new word springs in: fade + 4px rise + 3px blur clearing. */
 @keyframes token-enter {

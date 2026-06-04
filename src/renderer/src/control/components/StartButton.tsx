@@ -29,14 +29,24 @@ export function StartButton({
           ? 'Stop'
           : 'Start'
 
+  // §7.6 #13: 'connecting' is a short, non-cancelable handshake — disable the
+  // button so a click can't silently fire stopSession() (a hidden cancel behind
+  // the "Connecting…" label). 'reconnecting' stays clickable as a red Stop so a
+  // long reconnect can still be aborted. aria-busy covers both transitional states.
+  const connecting = status === 'connecting'
+  const reconnecting = status === 'reconnecting'
+
   return (
     <div className="flex flex-col items-stretch gap-2">
       <button
         type="button"
         onClick={active ? onStop : onStart}
+        disabled={connecting}
+        aria-busy={connecting || reconnecting}
         className={[
           'relative h-14 overflow-hidden rounded-16 text-[16px] font-semibold text-white transition-colors duration-180 ease-easeOutExpo',
           active ? 'bg-err' : 'bg-accent',
+          connecting ? 'cursor-not-allowed opacity-70' : '',
         ].join(' ')}
         style={active ? undefined : { backgroundImage: 'var(--accent-grad)' }}
       >

@@ -82,6 +82,28 @@ export function stopSession(refs: WindowRefs): void {
   clearKey();
 }
 
+// Authoritative overlay click-through lock state. Single source of truth so the
+// hotkey, tray and control→main IPC paths can never drift apart (#7). The
+// overlay launches click-through (locked) in windows.ts, so seed it true.
+let clickThroughLocked = true;
+
+// Read the current lock state (control seeds its toggle to match launch reality).
+export function isClickThroughLocked(): boolean {
+  return clickThroughLocked;
+}
+
+// Centralized click-through setter (#7). Updates the module var, applies it to
+// the overlay window (setIgnoreMouseEvents/setClickThrough), then echoes the
+// authoritative state to the control window so its toggle stays in sync after
+// hotkey/tray flips that originate outside it. Exported so index.ts routes the
+// Ctrl+Alt+L hotkey and the tray through the exact same path as the IPC handler.
+export function setClickThroughLocked(refs: WindowRefs, locked: boolean): void {
+  clickThroughLocked = locked;
+  const overlay = refs.overlay();
+  if (overlay) setClickThrough(overlay, locked);
+  sendTo(refs.control(), CHANNELS.overlayClickThroughState, { locked });
+}
+
 // Register every §4.4 handler. Idempotent-ish: callers register once at startup.
 export function registerIpc(refs: WindowRefs): void {
   // --- session:start (Control → Main) -------------------------------------
@@ -120,12 +142,12 @@ export function registerIpc(refs: WindowRefs): void {
   );
 
   // --- overlay:set-clickthrough (Control → Main) --------------------------
-  // Toggle the overlay's click-through lock directly on the window (§7.7).
+  // Route through the centralized setter so the module var, the window state and
+  // the control echo all agree, no matter who flips it (§7.7, #7).
   ipcMain.on(
     CHANNELS.overlaySetClickThrough,
     (_e: IpcMainEvent, payload: OverlayClickthroughPayload) => {
-      const overlay = refs.overlay();
-      if (overlay) setClickThrough(overlay, payload.locked);
+      setClickThroughLocked(refs, payload.locked);
     },
   );
 

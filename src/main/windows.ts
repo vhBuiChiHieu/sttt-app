@@ -78,13 +78,13 @@ function attachDevLogging(win: BrowserWindow, label: string): void {
 // click-through by default (toggleable via setClickThrough()).
 // ---------------------------------------------------------------------------
 export function createOverlay(): BrowserWindow {
-  // Anchor a reasonably sized caption bar near the bottom-center of the primary
-  // display's work area; the renderer fine-tunes layout from settings.
+  // Cover the FULL work area of the primary display (#12/#15). A transparent
+  // click-through canvas spanning the whole screen lets the renderer anchor the
+  // caption to true screen edges and render the panel without clipping (the old
+  // 200px bottom strip clipped the panel and trapped position presets in a band).
+  // workArea excludes the taskbar; the renderer fine-tunes layout from settings.
   const { workArea } = screen.getPrimaryDisplay();
-  const width = Math.min(960, workArea.width - 80);
-  const height = 200;
-  const x = workArea.x + Math.round((workArea.width - width) / 2);
-  const y = workArea.y + workArea.height - height - 48;
+  const { x, y, width, height } = workArea;
 
   const win = new BrowserWindow({
     width,

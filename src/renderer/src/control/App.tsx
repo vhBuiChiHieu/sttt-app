@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import type { Settings } from '@shared/types'
+import { DEFAULT_SETTINGS } from '@shared/types'
 import { useSessionStore, useSettingsStore } from '@renderer/state'
 import { useDebouncedPersist } from './lib/useDebouncedPersist'
 import { isSessionActive } from './lib/status'
@@ -26,6 +27,19 @@ const dragStyle: CSSProperties & { WebkitAppRegion?: 'drag' | 'no-drag' } = {
 // region or clicks get swallowed by the frameless window drag handler.
 const noDragStyle: CSSProperties & { WebkitAppRegion?: 'drag' | 'no-drag' } = {
   WebkitAppRegion: 'no-drag',
+}
+
+// The settings store mixes Settings data with action methods (set/hydrate/reset).
+// IPC structured-clone cannot serialize functions, so reduce any store snapshot to
+// a plain Settings object before persisting — otherwise window.api.setSettings
+// throws "An object could not be cloned".
+const SETTINGS_KEYS = Object.keys(DEFAULT_SETTINGS) as (keyof Settings)[]
+function toPlainSettings(snapshot: Settings): Settings {
+  const out: Record<string, unknown> = {}
+  for (const key of SETTINGS_KEYS) {
+    out[key] = snapshot[key]
+  }
+  return out as unknown as Settings
 }
 
 export function App(): JSX.Element {
@@ -102,19 +116,24 @@ export function App(): JSX.Element {
   const update = useCallback(
     <K extends keyof Settings>(key: K, value: Settings[K]) => {
       setField(key, value)
-      // Build the next full object from the freshest snapshot for persistence.
-      schedulePersist({ ...settingsRef.current, [key]: value })
+      // Build the next full object from the freshest snapshot for persistence,
+      // stripping the store's action methods so IPC can structured-clone it.
+      schedulePersist(toPlainSettings({ ...settingsRef.current, [key]: value }))
     },
     [setField, schedulePersist],
   )
 
   // Push the current appearance bundle to the overlay (§4.4 overlay:appearance).
+  // showSource/reducedMotion ride along so toggling them mid-session applies
+  // live in the overlay process instead of only after restart (#11).
   const pushAppearance = useCallback((next: Settings) => {
     window.api.setOverlayAppearance({
       fontScale: next.fontScale,
       opacity: next.opacity,
       theme: next.theme,
       position: next.position,
+      showSource: next.showSource,
+      reducedMotion: next.reducedMotion,
     })
   }, [])
 
@@ -127,8 +146,10 @@ export function App(): JSX.Element {
     [update],
   )
 
+  // Fields that must apply live in the overlay process: update the store (instant
+  // local feedback + persist) and push the full appearance bundle over IPC (#11).
   const onAppearanceField = useCallback(
-    <K extends 'fontScale' | 'opacity' | 'theme' | 'position'>(
+    <K extends 'fontScale' | 'opacity' | 'position' | 'showSource' | 'reducedMotion'>(
       key: K,
       value: Settings[K],
     ) => {
@@ -139,10 +160,21 @@ export function App(): JSX.Element {
   )
 
   // Click-through lock is not a persisted Settings field; route straight to main.
-  const [clickThroughLocked, setClickThroughLocked] = useState(false)
+  // Seed `true` to match launch reality — the overlay launches click-through
+  // locked (main inits the lock to true), so the toggle must start ON (#7).
+  const [clickThroughLocked, setClickThroughLocked] = useState(true)
   const onClickThrough = useCallback((locked: boolean) => {
     setClickThroughLocked(locked)
     window.api.setClickThrough({ locked })
+  }, [])
+
+  // Sync the toggle to main's authoritative state so hotkey/tray flips that
+  // originate outside the control window don't make it drift (#7).
+  useEffect(() => {
+    const unsub = window.api.onClickThroughState((p) => {
+      setClickThroughLocked(p.locked)
+    })
+    return unsub
   }, [])
 
   // --- Source mode (only mode 1 selectable in Phase 1). ---
@@ -243,13 +275,14 @@ export function App(): JSX.Element {
           onClickThrough={onClickThrough}
         />
 
+        {/* Theme control removed (#6 — Phase 1 is dark-only). showSource &
+            reducedMotion route through the live appearance push so they apply
+            mid-session in the overlay process, not only after restart (#11). */}
         <AppearanceCard
-          theme={settings.theme}
           showSource={settings.showSource}
           reducedMotion={settings.reducedMotion}
-          onTheme={(t) => onAppearanceField('theme', t)}
-          onShowSource={(v) => update('showSource', v)}
-          onReducedMotion={(v) => update('reducedMotion', v)}
+          onShowSource={(v) => onAppearanceField('showSource', v)}
+          onReducedMotion={(v) => onAppearanceField('reducedMotion', v)}
         />
 
         <ShortcutsCard hotkeys={settings.hotkeys} />

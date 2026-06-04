@@ -51,6 +51,10 @@ export interface TokenLineProps {
   reducedMotion: boolean;
   // Show the trailing provisional caret glow (only while actively listening).
   showCaret?: boolean;
+  // #3: optional rolling-window cap. When the combined word count exceeds this,
+  // only the trailing `maxWords` words are rendered (the leading overflow is
+  // dropped from the DOM but stays preserved in segment history on flush).
+  maxWords?: number;
 }
 
 export function TokenLine({
@@ -59,6 +63,7 @@ export function TokenLine({
   variant,
   reducedMotion,
   showCaret = true,
+  maxWords,
 }: TokenLineProps): JSX.Element {
   // Remember the previous word list so we can diff and only animate genuine
   // additions. We compare by (kind,index,text) signature.
@@ -99,16 +104,27 @@ export function TokenLine({
     idx += 1;
   }
 
-  // Persist the signature set for the next diff.
-  const nextSig = new Set(words.map((w) => w.key));
+  // #3: rolling window — when over the cap, drop the leading overflow and keep
+  // only the trailing `maxWords` words. Each survivor retains its original
+  // index-based key/signature so the reveal-diff below does NOT re-animate words
+  // that merely shifted position when older words scrolled off.
+  const rendered =
+    maxWords != null && words.length > maxWords ? words.slice(-maxWords) : words;
+
+  // Persist the signature set for the next diff. We diff against everything we
+  // actually render (the windowed tail) so dropped words don't pollute the set.
+  const nextSig = new Set(rendered.map((w) => w.key));
   prevSigRef.current = nextSig;
 
   // Per-variant typography (§7.2 / §7.8). VI lane carries the readability shadow
   // and generous line-height; source lane is small + muted.
+  // #4: sizes are in `em` so they scale with the `fontSize: ${fontScale}rem`
+  // set on the enclosing lanes container / card root. At fontScale=1 the parent
+  // is 1rem, so 1.5em / 0.95em reproduce today's 1.5rem / 0.95rem exactly.
   const laneClass =
     variant === 'vi'
-      ? 'font-vi font-semibold legible vi-lane text-[1.5rem]'
-      : 'font-sans legible text-[0.95rem]';
+      ? 'font-vi font-semibold legible vi-lane text-[1.5em]'
+      : 'font-sans legible text-[0.95em]';
 
   return (
     <div
@@ -116,7 +132,7 @@ export function TokenLine({
       // will-change hint kept on the line container (§7.4.3).
       style={{ willChange: 'transform, opacity' }}
     >
-      {words.map((w) => {
+      {rendered.map((w) => {
         const isFinal = w.kind === 'final';
         // One-time finalize sweep: a final word that is new this render and has
         // not been swept yet. (Disabled under reduced motion.)

@@ -1,18 +1,19 @@
 // FloatingPanel — toggleable overlay surface (§7.3).
 //
 // Draggable + resizable glass card. Header (drag handle) with controls:
-// opacity/pin, font-size −/+, mode switch (→ caption), lock click-through, close.
+// font-size −/+, mode switch (→ caption), lock click-through.
 // Body = segment scrollback (newest at bottom), auto-stick-to-bottom; when the
-// user scrolls up a "↓ Latest" chip appears. The list is VIRTUALIZED — only the
-// segments in (and just around) the viewport are rendered, capping DOM nodes for
-// long sessions (§7.3 / §13.6).
+// user scrolls up a "↓ Latest" chip appears. Segments render in a normal
+// in-flow scrolling column — the session is bounded by the 300-min cap so the
+// DOM node count stays acceptable; re-introduce windowing only if profiling
+// shows a real problem (§7.3 / §13.6).
 //
 // Drag/resize use transform/left/top on the card root only; the spec's
 // transform-only rule (§7.4.3) targets the high-frequency token reveal path, so
 // using left/top for occasional user-driven drag is acceptable and avoids a
 // transform that would fight the resize box model.
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Segment } from '@shared/types';
 import {
   useTokenStore,
@@ -21,31 +22,37 @@ import {
 } from '@renderer/state';
 import { TokenLine } from './TokenLine';
 
-// Fixed row height estimate for virtualization. Segments wrap, but a generous
-// fixed height keeps the math simple and the spacer accurate enough; rows clamp
-// their content height so the estimate holds (§7.3 "render only visible").
-const ROW_HEIGHT = 92;
-// Render this many extra rows above/below the viewport to avoid pop-in on scroll.
-const OVERSCAN = 3;
 // Distance from the bottom (px) under which we treat the view as "stuck".
 const STICK_THRESHOLD = 24;
+// #14: keep at least this many px of the panel on-screen when dragging so the
+// frameless card can't be lost off an edge (mirrors the resize min-size clamp).
+const MIN_VISIBLE = 40;
 
 const GLASS_STYLE: React.CSSProperties = {
-  background: 'var(--glass)',
   backdropFilter: 'blur(20px)',
   WebkitBackdropFilter: 'blur(20px)',
   boxShadow: 'var(--shadow-overlay)',
 };
 
+// #10: drive the glass backdrop alpha from settings.opacity (RGB matches the
+// --glass base) so the backdrop is translucent but the text stays opaque.
+function glassBg(opacity: number): string {
+  return `rgba(18, 20, 25, ${opacity})`;
+}
+
 // One scrollback row: source (muted) over Vietnamese (primary), with a timestamp.
+// #4: em sizes so the card-root fontSize (= fontScale rem) scales the text; at
+// fontScale=1 these reproduce today's 0.7rem / 0.85rem / 1.05rem exactly.
 function SegmentRow({
   segment,
   reducedMotion,
   fresh,
+  showSource,
 }: {
   segment: Segment;
   reducedMotion: boolean;
   fresh: boolean;
+  showSource: boolean;
 }): JSX.Element {
   const time = new Date(segment.time).toLocaleTimeString([], {
     hour: '2-digit',
@@ -57,18 +64,19 @@ function SegmentRow({
       className={`flex flex-col gap-1 border-b border-border px-4 py-3 ${
         fresh && !reducedMotion ? 'segment-commit' : ''
       }`}
-      style={{ minHeight: ROW_HEIGHT }}
     >
-      <div className="flex items-center justify-between text-[0.7rem] text-muted">
-        <span>{segment.speaker ?? 'Speaker'}</span>
-        <span>{time}</span>
+      <div className="flex items-center justify-between text-[0.7em] text-muted">
+        {/* #9: only show a speaker label once real diarization data exists. */}
+        {segment.speaker ? <span>{segment.speaker}</span> : null}
+        <span className="ml-auto">{time}</span>
       </div>
-      {segment.source ? (
-        <div className="font-sans text-[0.85rem] text-muted legible">
+      {/* #11: source lane gated on the showSource setting. */}
+      {showSource && segment.source ? (
+        <div className="font-sans text-[0.85em] text-muted legible">
           {segment.source}
         </div>
       ) : null}
-      <div className="font-vi text-[1.05rem] font-semibold text-text legible vi-lane">
+      <div className="font-vi text-[1.05em] font-semibold text-text legible vi-lane">
         {segment.vietnamese}
       </div>
     </div>
@@ -84,26 +92,24 @@ export function FloatingPanel(): JSX.Element {
   const reducedMotion = useSettingsStore((s) => s.reducedMotion);
   const setSetting = useSettingsStore((s) => s.set);
   const opacity = useSettingsStore((s) => s.opacity);
+  // #11: panel honours the live "show source text" toggle.
+  const showSource = useSettingsStore((s) => s.showSource);
 
   // --- card geometry (drag + resize), local UI state only ------------------
   const [box, setBox] = useState({ x: 80, y: 80, w: 420, h: 360 });
   const dragRef = useRef<{ dx: number; dy: number } | null>(null);
   const resizeRef = useRef<{ ox: number; oy: number; ow: number; oh: number } | null>(null);
 
-  // --- scrollback virtualization + stick-to-bottom -------------------------
+  // --- scrollback + stick-to-bottom ----------------------------------------
+  // #1/#2: segments render as a normal in-flow column (no fixed-height
+  // virtualization), so rows take their true wrapped height and never overlap.
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const [scrollTop, setScrollTop] = useState(0);
-  const [viewH, setViewH] = useState(0);
   const [stuck, setStuck] = useState(true);
   // Remember the last segment count so a freshly-committed row can slide in.
   const prevCountRef = useRef(segments.length);
 
-  // Measure the scroll viewport height (resize-aware).
-  useLayoutEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    setViewH(el.clientHeight);
-  }, [box.h]);
+  // The live (un-flushed) line is rendered after the scrollback as a "tail".
+  const hasLiveTail = Boolean(vi.final || vi.provisional);
 
   // Keep the view pinned to the latest segment while "stuck" (§7.3 auto-stick).
   useEffect(() => {
@@ -118,7 +124,6 @@ export function FloatingPanel(): JSX.Element {
   const onScroll = (): void => {
     const el = scrollRef.current;
     if (!el) return;
-    setScrollTop(el.scrollTop);
     const distToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     setStuck(distToBottom <= STICK_THRESHOLD);
   };
@@ -130,18 +135,6 @@ export function FloatingPanel(): JSX.Element {
     el.scrollTo({ top: el.scrollHeight, behavior: reducedMotion ? 'auto' : 'smooth' });
     setStuck(true);
   };
-
-  // The live (un-flushed) line is rendered after the scrollback as a "tail".
-  const liveTailHeight = vi.final || vi.provisional ? ROW_HEIGHT : 0;
-  const totalHeight = segments.length * ROW_HEIGHT + liveTailHeight;
-
-  // Window calculation: first/last visible index given scrollTop + viewport.
-  const first = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
-  const last = Math.min(
-    segments.length,
-    Math.ceil((scrollTop + viewH) / ROW_HEIGHT) + OVERSCAN,
-  );
-  const visible = segments.slice(first, last);
 
   // --- drag (header) -------------------------------------------------------
   const onHeaderPointerDown = (e: React.PointerEvent): void => {
@@ -156,10 +149,20 @@ export function FloatingPanel(): JSX.Element {
   };
   const onPointerMove = (e: React.PointerEvent): void => {
     if (dragRef.current) {
+      const nx = e.clientX - dragRef.current.dx;
+      const ny = e.clientY - dragRef.current.dy;
       setBox((b) => ({
         ...b,
-        x: e.clientX - dragRef.current!.dx,
-        y: e.clientY - dragRef.current!.dy,
+        // #14: clamp so at least MIN_VISIBLE px of the card stays on-screen on
+        // every edge — the frameless panel can no longer be dragged off and lost.
+        x: Math.min(
+          window.innerWidth - MIN_VISIBLE,
+          Math.max(MIN_VISIBLE - b.w, nx),
+        ),
+        y: Math.min(
+          window.innerHeight - MIN_VISIBLE,
+          Math.max(0, ny),
+        ),
       }));
     } else if (resizeRef.current) {
       const r = resizeRef.current;
@@ -189,8 +192,6 @@ export function FloatingPanel(): JSX.Element {
     setClickThroughLocked(next);
     window.api.setClickThrough({ locked: next });
   };
-  const cycleOpacity = (): void =>
-    setSetting('opacity', opacity >= 0.95 ? 0.6 : Number((opacity + 0.15).toFixed(2)));
 
   const listening = status === 'listening';
 
@@ -199,10 +200,13 @@ export function FloatingPanel(): JSX.Element {
       className="absolute flex flex-col overflow-hidden rounded-16 border border-border"
       style={{
         ...GLASS_STYLE,
+        // #10: backdrop alpha from settings.opacity (text stays opaque).
+        background: glassBg(opacity),
         left: box.x,
         top: box.y,
         width: box.w,
         height: box.h,
+        // #4: card-root fontSize scales every em-sized child (rows + live tail).
         fontSize: `${fontScale}rem`,
       }}
       onPointerMove={onPointerMove}
@@ -222,8 +226,9 @@ export function FloatingPanel(): JSX.Element {
           <span className="text-xs font-medium text-text">Transcript</span>
         </div>
         {/* Controls — stopPropagation so clicks don't start a drag. */}
+        {/* #10: opacity ◐ cycle removed — the control window slider is the single
+            source of truth for backdrop opacity (was desynced from it). */}
         <div className="flex items-center gap-1 text-muted" onPointerDown={(e) => e.stopPropagation()}>
-          <HeaderBtn label="Opacity" onClick={cycleOpacity}>◐</HeaderBtn>
           <HeaderBtn label="Smaller" onClick={() => bumpFont(-0.1)}>A−</HeaderBtn>
           <HeaderBtn label="Larger" onClick={() => bumpFont(0.1)}>A+</HeaderBtn>
           <HeaderBtn label="Caption mode" onClick={switchToCaption}>▭</HeaderBtn>
@@ -231,49 +236,34 @@ export function FloatingPanel(): JSX.Element {
         </div>
       </div>
 
-      {/* Scrollback body (virtualized). */}
+      {/* Scrollback body — natural in-flow column (#1/#2). */}
       <div
         ref={scrollRef}
         className="relative flex-1 overflow-y-auto"
         onScroll={onScroll}
         style={{ opacity: status === 'reconnecting' ? 0.6 : 1 }}
       >
-        {segments.length === 0 && !liveTailHeight ? (
+        {segments.length === 0 && !hasLiveTail ? (
           <div className="flex h-full items-center justify-center text-sm text-muted">
             {status === 'connecting' ? 'Connecting…' : 'Waiting for audio…'}
           </div>
         ) : (
-          // Spacer sized to the full virtual height; visible rows absolutely
-          // positioned at their offset so only ~viewport rows are in the DOM.
-          <div style={{ height: totalHeight, position: 'relative' }}>
-            {visible.map((seg, i) => {
-              const index = first + i;
-              return (
-                <div
-                  key={seg.time + ':' + index}
-                  style={{ position: 'absolute', top: index * ROW_HEIGHT, left: 0, right: 0 }}
-                >
-                  <SegmentRow
-                    segment={seg}
-                    reducedMotion={reducedMotion}
-                    fresh={index === segments.length - 1 && index >= prevCountRef.current}
-                  />
-                </div>
-              );
-            })}
+          <div className="flex flex-col">
+            {segments.map((seg, index) => (
+              <SegmentRow
+                key={seg.time + ':' + index}
+                segment={seg}
+                reducedMotion={reducedMotion}
+                showSource={showSource}
+                fresh={index === segments.length - 1 && index >= prevCountRef.current}
+              />
+            ))}
 
-            {/* Live (un-flushed) tail line below the committed segments. */}
-            {liveTailHeight ? (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: segments.length * ROW_HEIGHT,
-                  left: 0,
-                  right: 0,
-                }}
-                className="flex flex-col gap-1 px-4 py-3"
-              >
-                {source.final || source.provisional ? (
+            {/* Live (un-flushed) tail line as the last in-flow child. */}
+            {hasLiveTail ? (
+              <div className="flex flex-col gap-1 px-4 py-3">
+                {/* #11: source lane gated on the showSource setting. */}
+                {showSource && (source.final || source.provisional) ? (
                   <TokenLine
                     final={source.final}
                     provisional={source.provisional}
